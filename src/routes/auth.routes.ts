@@ -5,7 +5,7 @@ import { env } from '../config/env';
 import { DEFAULT_REQUIREMENTS, Requirement } from '../models/Requirement';
 import { User, type UserDoc } from '../models/User';
 import { currentUser, requireAuth } from '../middleware/auth';
-import { formatDisplayDate } from '../utils/date';
+import { formatDisplayDate, isValidDateOfBirth, parseDateOfBirth } from '../utils/date';
 import { HttpError, notFound, unauthorized } from '../utils/http';
 import { signAuthToken } from '../utils/jwt';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../utils/mailer';
@@ -48,7 +48,11 @@ const registerSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name.').max(120),
   suffix: z.string().trim().max(20, 'Suffix is too long.').optional(),
   email: z.string().trim().toLowerCase().email('Enter a valid school email.'),
-  age: z.coerce.number().int('Enter a valid age.').min(1).max(120),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .refine(isValidDateOfBirth, 'Enter a valid date of birth.')
+    .transform((value) => parseDateOfBirth(value) as Date),
   sex: z.string().trim().min(1, 'Choose your sex.').max(20),
   course: z.string().trim().min(1, 'Choose a course.'),
   yearLevel: z.string().trim().min(1, 'Choose a year level.'),
@@ -99,7 +103,7 @@ authRouter.post('/register', async (req, res) => {
     fullName: body.fullName,
     suffix: body.suffix ?? '',
     emailVerified: false,
-    age: body.age,
+    dateOfBirth: body.dateOfBirth,
     sex: body.sex,
     course: body.course,
     yearLevel: body.yearLevel,

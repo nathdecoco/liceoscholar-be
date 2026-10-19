@@ -5,6 +5,7 @@ import type { FilterQuery } from 'mongoose';
 import { Requirement } from '../models/Requirement';
 import { STUDENT_STATUSES, User, type User as UserType } from '../models/User';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { isValidDateOfBirth, parseDateOfBirth } from '../utils/date';
 import { notFound } from '../utils/http';
 import { serializeRequirement, serializeStudentListItem, serializeUser } from '../utils/serialize';
 import { assertObjectId, escapeRegExp } from '../utils/validation';
@@ -69,7 +70,12 @@ const updateStudentSchema = z.object({
   course: z.string().trim().min(1).optional(),
   yearLevel: z.string().trim().min(1).optional(),
   scholarshipType: z.string().trim().min(1).optional(),
-  age: z.coerce.number().int().min(1).max(120).optional(),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .refine(isValidDateOfBirth, 'Enter a valid date of birth.')
+    .transform((value) => parseDateOfBirth(value) as Date)
+    .optional(),
   sex: z.string().trim().min(1).max(20).optional(),
   suffix: z.string().trim().max(20).optional()
 });
@@ -89,6 +95,9 @@ studentRouter.patch('/:id', async (req, res) => {
       student.set(key, value);
     }
   }
+
+  // Age is derived from the date of birth, so drop any stale stored value.
+  if (body.dateOfBirth !== undefined) student.age = undefined;
 
   await student.save();
   res.json({ student: serializeUser(student) });

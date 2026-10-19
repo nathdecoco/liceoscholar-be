@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/db/seed-cli.ts",
+    "migrate:uploads": "tsx src/db/migrate-uploads.ts",
     "test": "tsx tests/api.test.ts"
   },
   "keywords": [

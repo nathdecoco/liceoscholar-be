@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { Requirement } from '../models/Requirement';
 import { currentUser, requireAuth, requireRole } from '../middleware/auth';
 import { SCHOLARSHIPS } from '../config/scholarships';
-import { formatDisplayDate } from '../utils/date';
+import { formatDisplayDate, isValidDateOfBirth, parseDateOfBirth } from '../utils/date';
 import { badRequest, forbidden, notFound } from '../utils/http';
-import { deleteUploadedFile, documentUpload, imageUpload, uploadedFileUrl } from '../middleware/upload';
+import { deleteUploadedFile, documentUpload, imageUpload, storeUpload } from '../middleware/upload';
 import { runAutomaticReview } from '../services/review.service';
 import { serializeRequirement, serializeUser } from '../utils/serialize';
 import { assertObjectId } from '../utils/validation';
@@ -30,7 +30,12 @@ meRouter.get('/', async (req, res) => {
 
 const updateProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(120).optional(),
-  age: z.coerce.number().int().min(1).max(120).optional(),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .refine(isValidDateOfBirth, 'Enter a valid date of birth.')
+    .transform((value) => parseDateOfBirth(value) as Date)
+    .optional(),
   sex: z.string().trim().min(1).max(20).optional(),
   suffix: z.string().trim().max(20).optional(),
   scholarshipType: z
@@ -51,7 +56,11 @@ meRouter.patch('/', async (req, res) => {
     body.scholarshipType !== undefined && body.scholarshipType !== user.scholarshipType;
 
   if (body.fullName !== undefined) user.fullName = body.fullName;
-  if (body.age !== undefined) user.age = body.age;
+  if (body.dateOfBirth !== undefined) {
+    user.dateOfBirth = body.dateOfBirth;
+    // Age is now worked out from the date, so drop the stale stored value.
+    user.age = undefined;
+  }
   if (body.sex !== undefined) user.sex = body.sex;
   if (body.suffix !== undefined) user.suffix = body.suffix;
   if (body.scholarshipType !== undefined) user.scholarshipType = body.scholarshipType;
@@ -81,9 +90,11 @@ meRouter.post('/photo', imageUpload.single('photo'), async (req, res) => {
     throw badRequest('Attach an image in the "photo" field.');
   }
 
-  deleteUploadedFile(user.profilePhotoUrl);
-  user.profilePhotoUrl = uploadedFileUrl(req.file);
+  // Store the replacement first: if it fails the old picture is still intact.
+  const previousPhoto = user.profilePhotoUrl;
+  user.profilePhotoUrl = await storeUpload(req.file);
   await user.save();
+  await deleteUploadedFile(previousPhoto);
 
   res.json({ user: serializeUser(user) });
 });
@@ -102,15 +113,17 @@ meRouter.post(
       throw badRequest('Attach a file in the "file" field.');
     }
 
-    deleteUploadedFile(requirement.fileUrl);
+    // Store the replacement first: if it fails the old file is still intact.
+    const previousFile = requirement.fileUrl;
     requirement.fileName = req.file.originalname;
-    requirement.fileUrl = uploadedFileUrl(req.file);
+    requirement.fileUrl = await storeUpload(req.file);
     requirement.mimeType = req.file.mimetype;
     requirement.status = 'Pending';
     requirement.date = formatDisplayDate(new Date());
     // A new file always needs a fresh review.
     requirement.set({ analysis: undefined, analysisState: 'none', analysisError: undefined });
     await requirement.save();
+    await deleteUploadedFile(previousFile);
 
     const payload = serializeRequirement(requirement);
 
@@ -127,7 +140,7 @@ meRouter.delete('/requirements/:id/file', requireRole('student'), async (req, re
   const requirementId = assertObjectId(String(req.params.id), 'requirement id');
   const requirement = await loadOwnedRequirement(requirementId, user.id as string);
 
-  deleteUploadedFile(requirement.fileUrl);
+  const previousFile = requirement.fileUrl;
   requirement.set({
       fileName: undefined,
       fileUrl: undefined,
@@ -138,6 +151,7 @@ meRouter.delete('/requirements/:id/file', requireRole('student'), async (req, re
       analysisError: undefined
     });
   await requirement.save();
+  await deleteUploadedFile(previousFile);
 
   res.json({ requirement: serializeRequirement(requirement) });
 });

@@ -7,16 +7,11 @@
  * Run with: npm test
  */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import request from 'supertest';
 
-const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'liceoscholar-uploads-'));
 process.env.NODE_ENV = 'test';
-process.env.UPLOAD_DIR = uploadDir;
 process.env.JWT_SECRET = 'test-secret-do-not-use-in-production';
 process.env.SEED_ON_START = 'false';
 process.env.ADMIN_USERNAME = 'authorizedadminscholar';
@@ -52,6 +47,11 @@ async function main(): Promise<void> {
   const app = createApp();
 
   const { needsAiReview, buildReviewPrompt } = await import('../src/config/scholarships');
+  const { ageFromDateOfBirth, parseDateOfBirth } = await import('../src/utils/date');
+
+  /** Stable small hash so each bad-date signup gets its own email. */
+  const hashCode = (value: string): number =>
+    [...value].reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) | 0, 7);
 
   console.log('\nliceoscholar-be API tests\n');
 
@@ -115,7 +115,7 @@ async function main(): Promise<void> {
       .send({
         fullName: 'Dela Cruz, Juan P.',
         email: 'juan.delacruz@liceo.edu.ph',
-        age: 19,
+        dateOfBirth: '2006-05-04',
         sex: 'Male',
         course: 'College of Information Technology',
         yearLevel: '1st Year',
@@ -127,7 +127,66 @@ async function main(): Promise<void> {
     assert.equal(res.body.user.emailVerified, false);
     assert.equal(res.body.user.sex, 'Male');
     assert.equal(res.body.user.course, 'College of Information Technology');
+    assert.equal(res.body.user.dateOfBirth, '2006-05-04');
+    // Age is no longer part of the account shape; only the date is returned.
+    assert.equal(res.body.user.age, undefined);
     studentId = res.body.user.id as string;
+  });
+
+  await check('registration rejects an impossible date of birth', async () => {
+    for (const dateOfBirth of ['2005-02-30', '2005-13-01', '19-05-2006', 'not-a-date', '']) {
+      await request(app)
+        .post('/api/auth/register')
+        .send({
+          fullName: 'Bad Date',
+          email: `bad.${Math.abs(hashCode(dateOfBirth))}@liceo.edu.ph`,
+          dateOfBirth,
+          sex: 'Male',
+          course: 'College of Information Technology',
+          yearLevel: '1st Year',
+          scholarshipType: 'Half Academic Scholarship',
+          password: 'Password1'
+        })
+        .expect(400);
+    }
+  });
+
+  await check('registration rejects a date of birth in the future', async () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    await request(app)
+      .post('/api/auth/register')
+      .send({
+        fullName: 'From The Future',
+        email: 'future.student@liceo.edu.ph',
+        dateOfBirth: tomorrow,
+        sex: 'Male',
+        course: 'College of Information Technology',
+        yearLevel: '1st Year',
+        scholarshipType: 'Half Academic Scholarship',
+        password: 'Password1'
+      })
+      .expect(400);
+  });
+
+  await check('age is derived from the date of birth, not stored', () => {
+    const thisYear = new Date().getUTCFullYear();
+    // Someone born on 31 December twenty years ago.
+    const december31 = `${thisYear - 20}-12-31`;
+
+    // On the birthday itself, the year has just turned over.
+    assert.equal(
+      ageFromDateOfBirth(parseDateOfBirth(december31), new Date(Date.UTC(thisYear, 11, 31))),
+      20
+    );
+
+    // The day before, the birthday has not happened yet.
+    assert.equal(
+      ageFromDateOfBirth(parseDateOfBirth(december31), new Date(Date.UTC(thisYear, 11, 30))),
+      19
+    );
+
+    assert.equal(ageFromDateOfBirth(null), null);
   });
 
   await check('registration rejects weak passwords', async () => {
@@ -136,7 +195,7 @@ async function main(): Promise<void> {
       .send({
         fullName: 'Weak Password',
         email: 'weak@liceo.edu.ph',
-        age: 19,
+        dateOfBirth: '2006-05-04',
         sex: 'Male',
         course: 'College of Information Technology',
         yearLevel: '1st Year',
@@ -152,7 +211,7 @@ async function main(): Promise<void> {
       .send({
         fullName: 'No Sex',
         email: 'nosex@liceo.edu.ph',
-        age: 19,
+        dateOfBirth: '2006-05-04',
         course: 'College of Nursing',
         yearLevel: '1st Year',
         scholarshipType: 'Half Academic Scholarship',
@@ -170,7 +229,7 @@ async function main(): Promise<void> {
       .send({
         fullName: 'Dela Cruz, Juan P.',
         email: 'juan.delacruz@liceo.edu.ph',
-        age: 19,
+        dateOfBirth: '2006-05-04',
         sex: 'Male',
         course: 'College of Information Technology',
         yearLevel: '1st Year',
@@ -415,6 +474,25 @@ async function main(): Promise<void> {
       .expect(403);
   });
 
+  await check('a student can set their date of birth', async () => {
+    const res = await request(app)
+      .patch('/api/me')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ dateOfBirth: '2006-09-30' })
+      .expect(200);
+
+    assert.equal(res.body.user.dateOfBirth, '2006-09-30');
+    assert.equal(res.body.user.age, undefined);
+  });
+
+  await check('a bad date of birth is rejected on update', async () => {
+    await request(app)
+      .patch('/api/me')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ dateOfBirth: '2006-02-31' })
+      .expect(400);
+  });
+
   await check('student uploads a requirement file', async () => {
     const res = await request(app)
       .post(`/api/me/requirements/${requirementId}/file`)
@@ -507,7 +585,6 @@ async function main(): Promise<void> {
 
   await disconnectDatabase();
   await mongod.stop();
-  fs.rmSync(uploadDir, { recursive: true, force: true });
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length > 0) {

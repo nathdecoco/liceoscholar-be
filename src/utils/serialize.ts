@@ -1,5 +1,6 @@
 import type { RequirementDoc } from '../models/Requirement';
 import type { StudentStatus, UserDoc, UserRole } from '../models/User';
+import { toDateInputValue } from './date';
 
 /** Shape returned to the browser for a logged-in account. */
 export interface ApiUser {
@@ -9,7 +10,8 @@ export interface ApiUser {
   email: string;
   fullName: string;
   emailVerified: boolean;
-  age: number | null;
+  /** `YYYY-MM-DD`, or null when the student has not given one yet. */
+  dateOfBirth: string | null;
   course: string;
   yearLevel: string;
   scholarshipType: string;
@@ -68,7 +70,7 @@ export function serializeUser(user: UserDoc): ApiUser {
     email: user.email ?? '',
     fullName: user.fullName,
     emailVerified: user.emailVerified ?? false,
-    age: user.age ?? null,
+    dateOfBirth: toDateInputValue(user.dateOfBirth),
     course: user.course ?? '',
     yearLevel: user.yearLevel ?? '',
     scholarshipType: user.scholarshipType ?? '',

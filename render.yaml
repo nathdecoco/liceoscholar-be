@@ -1,0 +1,56 @@
+# Render Blueprint — creates the deployed API in one step.
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: liceoscholar
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Secrets: Render asks for these when the Blueprint is created.
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # Safe defaults. SEED_ON_START stays off so demo students are never
+      # created in the live database.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: SEED_ON_START
+        value: "false"
+      - key: MAX_UPLOAD_MB
+        value: "12"
+      - key: GEMINI_MODEL
+        value: gemini-3-flash-preview
+      - key: GEMINI_TIMEOUT_MS
+        value: "120000"
+      - key: GEMINI_MAX_FILE_MB
+        value: "8"

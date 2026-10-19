@@ -5,7 +5,7 @@ import type { UserDoc } from '../models/User';
 
 import { env } from '../config/env';
 import { buildReviewPrompt, needsAiReview } from '../config/scholarships';
-import { uploadRoot } from '../middleware/upload';
+import { readStoredFile } from '../db/gridfs';
 import { analyzeRequirementFile, isAnalysable } from '../utils/gemini';
 
 /**
@@ -44,13 +44,12 @@ export async function runAutomaticReview(
       );
     }
 
-    const filePath = path.join(uploadRoot, path.basename(requirement.fileUrl));
-    if (!filePath.startsWith(uploadRoot)) {
-      throw new Error('The stored file path is not valid.');
+    const stored = await readStoredFile(path.basename(requirement.fileUrl));
+    if (!stored) {
+      throw new Error('The uploaded file could not be found on the server.');
     }
 
-    const { readFile } = await import('node:fs/promises');
-    const file = await readFile(filePath);
+    const file = stored.data;
 
     if (file.byteLength > env.geminiMaxFileMb * 1024 * 1024) {
       throw new Error(

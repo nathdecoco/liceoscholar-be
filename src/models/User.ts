@@ -28,7 +28,20 @@ const userSchema = new Schema(
     passwordResetRequestedAt: { type: Date },
     passwordResetAttempts: { type: Number, default: 0 },
 
+    /**
+     * Date of birth, stored at UTC midnight. Age is worked out from this on the
+     * way out rather than stored, so it can never go stale.
+     */
+    dateOfBirth: { type: Date },
+
+    /**
+     * Age captured before date of birth existed.
+     *
+     * No longer written or returned anywhere; kept only so the values already
+     * stored on older accounts are not silently discarded.
+     */
     age: { type: Number, min: 1, max: 120 },
+
     course: { type: String, trim: true },
     yearLevel: { type: String, trim: true },
     scholarshipType: { type: String, trim: true },

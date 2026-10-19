@@ -46,14 +46,7 @@ export const env = {
   /** Password given to every seeded demo student. */
   seedStudentPassword: process.env.SEED_STUDENT_PASSWORD ?? 'Scholar123',
 
-  uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   maxUploadMb: optionalNumber(process.env.MAX_UPLOAD_MB, 12),
-
-  /**
-   * Absolute base URL used when building file links. When empty the server
-   * derives it from the incoming request (works for local development).
-   */
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? '').replace(/\/$/, ''),
 
   seedOnStart: (process.env.SEED_ON_START ?? 'true') !== 'false',
 

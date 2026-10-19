@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { DEFAULT_REQUIREMENTS, type RequirementStatus, Requirement } from '../models/Requirement';
 import { type StudentStatus, User } from '../models/User';
+import { parseDateOfBirth } from '../utils/date';
 import { hashPassword } from '../utils/password';
 
 interface SeedStudent {
@@ -10,7 +11,7 @@ interface SeedStudent {
   yearLevel: string;
   scholarshipType: string;
   status: StudentStatus;
-  age: number;
+  dateOfBirth: string;
   sex: string;
   requirementDate: string;
   requirementStatuses: RequirementStatus[];
@@ -25,7 +26,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     yearLevel: '3rd Year',
     scholarshipType: 'Full Academic Scholarship',
     status: 'Qualified',
-    age: 20,
+    dateOfBirth: '2006-02-14',
     sex: 'Female',
     requirementDate: '08/06/2026',
     requirementStatuses: ['Qualified', 'Qualified', 'Qualified'],
@@ -38,7 +39,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     yearLevel: '3rd Year',
     scholarshipType: 'Half Academic Scholarship',
     status: 'Pending',
-    age: 20,
+    dateOfBirth: '2005-11-03',
     sex: 'Female',
     requirementDate: '08/06/2026',
     requirementStatuses: ['Pending', 'Qualified', 'Pending'],
@@ -51,7 +52,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     yearLevel: '3rd Year',
     scholarshipType: 'Non-Academic Scholarship',
     status: 'Pending',
-    age: 20,
+    dateOfBirth: '2006-07-28',
     sex: 'Female',
     requirementDate: '08/06/2026',
     requirementStatuses: ['Pending', 'Qualified', 'Not Qualified'],
@@ -64,7 +65,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     yearLevel: '2nd Year',
     scholarshipType: 'Full Academic Scholarship',
     status: 'Not Qualified',
-    age: 20,
+    dateOfBirth: '2006-01-09',
     sex: 'Male',
     requirementDate: '08/06/2026',
     requirementStatuses: ['Qualified', 'Not Qualified', 'Pending'],
@@ -106,7 +107,6 @@ async function seedAdministrator(): Promise<void> {
         fullName: 'Batumbakal, Ashton Tantado Jr.',
         passwordHash,
         emailVerified: true,
-        age: 67,
         sex: 'Male',
         suffix: 'N/A'
       }
@@ -128,7 +128,7 @@ async function seedStudents(): Promise<void> {
           fullName: seed.fullName,
           passwordHash,
           emailVerified: true,
-          age: seed.age,
+          dateOfBirth: parseDateOfBirth(seed.dateOfBirth),
           course: seed.course,
           yearLevel: seed.yearLevel,
           scholarshipType: seed.scholarshipType,
