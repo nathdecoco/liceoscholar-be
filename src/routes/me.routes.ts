@@ -6,7 +6,7 @@ import { currentUser, requireAuth, requireRole } from '../middleware/auth';
 import { SCHOLARSHIPS } from '../config/scholarships';
 import { formatDisplayDate, isValidDateOfBirth, parseDateOfBirth } from '../utils/date';
 import { badRequest, forbidden, notFound } from '../utils/http';
-import { deleteUploadedFile, documentUpload, imageUpload, storeUpload } from '../middleware/upload';
+import { deleteUploadedFile, documentUpload, imageUpload, uploadedFileUrl } from '../middleware/upload';
 import { runAutomaticReview } from '../services/review.service';
 import { serializeRequirement, serializeUser } from '../utils/serialize';
 import { assertObjectId } from '../utils/validation';
@@ -90,11 +90,9 @@ meRouter.post('/photo', imageUpload.single('photo'), async (req, res) => {
     throw badRequest('Attach an image in the "photo" field.');
   }
 
-  // Store the replacement first: if it fails the old picture is still intact.
-  const previousPhoto = user.profilePhotoUrl;
-  user.profilePhotoUrl = await storeUpload(req.file);
+  deleteUploadedFile(user.profilePhotoUrl);
+  user.profilePhotoUrl = uploadedFileUrl(req.file);
   await user.save();
-  await deleteUploadedFile(previousPhoto);
 
   res.json({ user: serializeUser(user) });
 });
@@ -113,17 +111,15 @@ meRouter.post(
       throw badRequest('Attach a file in the "file" field.');
     }
 
-    // Store the replacement first: if it fails the old file is still intact.
-    const previousFile = requirement.fileUrl;
+    deleteUploadedFile(requirement.fileUrl);
     requirement.fileName = req.file.originalname;
-    requirement.fileUrl = await storeUpload(req.file);
+    requirement.fileUrl = uploadedFileUrl(req.file);
     requirement.mimeType = req.file.mimetype;
     requirement.status = 'Pending';
     requirement.date = formatDisplayDate(new Date());
     // A new file always needs a fresh review.
     requirement.set({ analysis: undefined, analysisState: 'none', analysisError: undefined });
     await requirement.save();
-    await deleteUploadedFile(previousFile);
 
     const payload = serializeRequirement(requirement);
 
@@ -140,7 +136,7 @@ meRouter.delete('/requirements/:id/file', requireRole('student'), async (req, re
   const requirementId = assertObjectId(String(req.params.id), 'requirement id');
   const requirement = await loadOwnedRequirement(requirementId, user.id as string);
 
-  const previousFile = requirement.fileUrl;
+  deleteUploadedFile(requirement.fileUrl);
   requirement.set({
       fileName: undefined,
       fileUrl: undefined,
@@ -151,7 +147,6 @@ meRouter.delete('/requirements/:id/file', requireRole('student'), async (req, re
       analysisError: undefined
     });
   await requirement.save();
-  await deleteUploadedFile(previousFile);
 
   res.json({ requirement: serializeRequirement(requirement) });
 });

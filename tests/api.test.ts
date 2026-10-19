@@ -7,11 +7,16 @@
  * Run with: npm test
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import request from 'supertest';
 
+const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'liceoscholar-uploads-'));
 process.env.NODE_ENV = 'test';
+process.env.UPLOAD_DIR = uploadDir;
 process.env.JWT_SECRET = 'test-secret-do-not-use-in-production';
 process.env.SEED_ON_START = 'false';
 process.env.ADMIN_USERNAME = 'authorizedadminscholar';
@@ -585,6 +590,7 @@ async function main(): Promise<void> {
 
   await disconnectDatabase();
   await mongod.stop();
+  fs.rmSync(uploadDir, { recursive: true, force: true });
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length > 0) {

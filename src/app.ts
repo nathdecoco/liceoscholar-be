@@ -1,11 +1,9 @@
-import path from 'node:path';
-
 import cors from 'cors';
 import express from 'express';
 
 import { env } from './config/env';
-import { openStoredFile } from './db/gridfs';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { uploadRoot } from './middleware/upload';
 import { authRouter } from './routes/auth.routes';
 import { meRouter } from './routes/me.routes';
 import { requirementRouter } from './routes/requirement.routes';
@@ -28,20 +26,8 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Uploaded profile pictures and requirement files, streamed out of GridFS.
-  app.get('/uploads/:filename', async (req, res) => {
-    const stored = await openStoredFile(path.basename(String(req.params.filename)));
-
-    if (!stored) {
-      res.status(404).json({ error: 'File not found.' });
-      return;
-    }
-
-    res.setHeader('Content-Type', stored.contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    stored.stream.on('error', () => res.destroy());
-    stored.stream.pipe(res);
-  });
+  // Uploaded profile pictures and requirement files.
+  app.use('/uploads', express.static(uploadRoot, { maxAge: '1h', fallthrough: true }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'liceoscholar-be', time: new Date().toISOString() });

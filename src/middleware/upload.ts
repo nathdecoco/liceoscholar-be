@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import multer from 'multer';
 
 import { env } from '../config/env';
-import { deleteFile, saveFile } from '../db/gridfs';
 import { HttpError } from '../utils/http';
+
+/** Absolute directory that uploaded files are written to. */
+export const uploadRoot = path.resolve(process.cwd(), env.uploadDir);
+fs.mkdirSync(uploadRoot, { recursive: true });
 
 const DOCUMENT_EXTENSIONS = new Set([
   '.jpg',
@@ -21,13 +25,17 @@ const DOCUMENT_EXTENSIONS = new Set([
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-/**
- * Files are held in memory just long enough to reach GridFS. Nothing is
- * written to the server's disk, which hosting providers wipe between deploys.
- */
 function createUploader(allowedExtensions: Set<string>, label: string) {
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadRoot),
+    filename: (_req, file, cb) => {
+      const extension = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${extension}`);
+    }
+  });
+
   return multer({
-    storage: multer.memoryStorage(),
+    storage,
     limits: { fileSize: env.maxUploadMb * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const extension = path.extname(file.originalname).toLowerCase();
@@ -52,19 +60,18 @@ export const documentUpload = createUploader(DOCUMENT_EXTENSIONS, 'document');
 /** Accepts profile pictures only. */
 export const imageUpload = createUploader(IMAGE_EXTENSIONS, 'image');
 
-/** Saves an uploaded file and returns its public `/uploads/...` path. */
-export async function storeUpload(file: Express.Multer.File): Promise<string> {
-  const extension = path.extname(file.originalname).toLowerCase();
-  const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${extension}`;
-
-  return saveFile(filename, file.buffer, file.mimetype);
+export function uploadedFileUrl(file: Express.Multer.File): string {
+  return `/uploads/${file.filename}`;
 }
 
-/** Best-effort removal of a previously stored file. */
-export async function deleteUploadedFile(fileUrl: string | null | undefined): Promise<void> {
+/** Best-effort removal of a previously uploaded file from disk. */
+export function deleteUploadedFile(fileUrl: string | null | undefined): void {
   if (!fileUrl) return;
 
-  await deleteFile(path.basename(fileUrl)).catch(() => {
+  const target = path.join(uploadRoot, path.basename(fileUrl));
+  if (!target.startsWith(uploadRoot)) return;
+
+  fs.promises.unlink(target).catch(() => {
     /* File already removed — nothing to do. */
   });
 }
