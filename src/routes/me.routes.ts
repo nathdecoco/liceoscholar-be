@@ -6,7 +6,7 @@ import { currentUser, requireAuth, requireRole } from '../middleware/auth';
 import { SCHOLARSHIPS } from '../config/scholarships';
 import { formatDisplayDate, isValidDateOfBirth, parseDateOfBirth } from '../utils/date';
 import { badRequest, forbidden, notFound } from '../utils/http';
-import { deleteUploadedFile, documentUpload, imageUpload, uploadedFileUrl } from '../middleware/upload';
+import { deleteUploadedFile, documentUpload, imageUpload, storeUpload } from '../middleware/upload';
 import { runAutomaticReview } from '../services/review.service';
 import { serializeRequirement, serializeUser } from '../utils/serialize';
 import { assertObjectId } from '../utils/validation';
@@ -90,8 +90,9 @@ meRouter.post('/photo', imageUpload.single('photo'), async (req, res) => {
     throw badRequest('Attach an image in the "photo" field.');
   }
 
-  deleteUploadedFile(user.profilePhotoUrl);
-  user.profilePhotoUrl = uploadedFileUrl(req.file);
+  const newPhotoUrl = await storeUpload(req.file);
+  await deleteUploadedFile(user.profilePhotoUrl);
+  user.profilePhotoUrl = newPhotoUrl;
   await user.save();
 
   res.json({ user: serializeUser(user) });
@@ -111,9 +112,10 @@ meRouter.post(
       throw badRequest('Attach a file in the "file" field.');
     }
 
-    deleteUploadedFile(requirement.fileUrl);
+    const newFileUrl = await storeUpload(req.file);
+    await deleteUploadedFile(requirement.fileUrl);
     requirement.fileName = req.file.originalname;
-    requirement.fileUrl = uploadedFileUrl(req.file);
+    requirement.fileUrl = newFileUrl;
     requirement.mimeType = req.file.mimetype;
     requirement.status = 'Pending';
     requirement.date = formatDisplayDate(new Date());
@@ -136,7 +138,7 @@ meRouter.delete('/requirements/:id/file', requireRole('student'), async (req, re
   const requirementId = assertObjectId(String(req.params.id), 'requirement id');
   const requirement = await loadOwnedRequirement(requirementId, user.id as string);
 
-  deleteUploadedFile(requirement.fileUrl);
+  await deleteUploadedFile(requirement.fileUrl);
   requirement.set({
       fileName: undefined,
       fileUrl: undefined,

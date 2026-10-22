@@ -140,7 +140,7 @@ studentRouter.patch('/:id', async (req, res) => {
 /**
  * Permanently removes a student along with every document they submitted.
  *
- * Uploaded files are deleted from disk too, so nothing is left orphaned. The
+ * Uploaded files are deleted from storage too, so nothing is left orphaned. The
  * administrator account is never a student, so it cannot be removed here.
  */
 studentRouter.delete('/:id', async (req, res) => {
@@ -154,10 +154,10 @@ studentRouter.delete('/:id', async (req, res) => {
   const requirements = await Requirement.find({ student: student._id });
 
   for (const requirement of requirements) {
-    deleteUploadedFile(requirement.fileUrl);
+    await deleteUploadedFile(requirement.fileUrl);
   }
 
-  deleteUploadedFile(student.profilePhotoUrl);
+  await deleteUploadedFile(student.profilePhotoUrl);
 
   await Requirement.deleteMany({ student: student._id });
   await student.deleteOne();
@@ -179,7 +179,7 @@ studentRouter.post('/reset-semester', async (_req, res) => {
   const requirements = await Requirement.find({ student: { $in: studentIds } });
 
   for (const requirement of requirements) {
-    deleteUploadedFile(requirement.fileUrl);
+    await deleteUploadedFile(requirement.fileUrl);
   }
 
   // Wipe the submission itself: no file, no verdict, no review history.

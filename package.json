@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/db/seed-cli.ts",
     "migrate:statuses": "tsx src/db/migrate-status-names.ts",
+    "migrate:uploads": "tsx src/db/migrate-uploads.ts",
     "test": "tsx tests/api.test.ts"
   },
   "keywords": [

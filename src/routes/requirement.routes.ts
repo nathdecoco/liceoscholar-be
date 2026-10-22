@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
 import { Router } from 'express';
 import { z } from 'zod';
 
@@ -9,7 +6,7 @@ import type { RequirementDoc } from '../models/Requirement';
 import { REQUIREMENT_STATUSES, Requirement } from '../models/Requirement';
 import { User } from '../models/User';
 import { requireAuth, requireRole } from '../middleware/auth';
-import { uploadRoot } from '../middleware/upload';
+import { readUploadedFile } from '../middleware/upload';
 import { buildReviewPrompt, needsAiReview } from '../config/scholarships';
 import { badRequest, notFound } from '../utils/http';
 import { analyzeRequirementFile, isAnalysable } from '../utils/gemini';
@@ -93,16 +90,8 @@ requirementRouter.post('/:id/analyze', async (req, res) => {
     studentName: student?.fullName ?? ''
   });
 
-  // Only ever read from inside the upload directory.
-  const filePath = path.join(uploadRoot, path.basename(requirement.fileUrl));
-  if (!filePath.startsWith(uploadRoot)) {
-    throw badRequest('The stored file path is not valid.');
-  }
-
-  let file: Buffer;
-  try {
-    file = await fs.readFile(filePath);
-  } catch {
+  const file = await readUploadedFile(requirement.fileUrl);
+  if (!file) {
     throw notFound('The uploaded file could not be found on the server.');
   }
 
