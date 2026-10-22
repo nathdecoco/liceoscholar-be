@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { env } from '../config/env';
+import type { RequirementDoc } from '../models/Requirement';
 import { REQUIREMENT_STATUSES, Requirement } from '../models/Requirement';
 import { User } from '../models/User';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -24,6 +25,20 @@ const updateRequirementSchema = z.object({
   status: z.enum(REQUIREMENT_STATUSES)
 });
 
+/**
+ * A requirement can only be reviewed once the student has actually submitted a
+ * file. There is nothing to approve or reject otherwise, so the status stays
+ * where it is.
+ */
+function assertHasFile(requirement: RequirementDoc): void {
+  if (!requirement.fileUrl) {
+    throw badRequest(
+      `The "${requirement.description}" has no file uploaded yet, so its status ` +
+        'cannot be changed.'
+    );
+  }
+}
+
 /** Approve or disapprove a submitted requirement. */
 requirementRouter.patch('/:id', async (req, res) => {
   const { status } = updateRequirementSchema.parse(req.body);
@@ -32,6 +47,8 @@ requirementRouter.patch('/:id', async (req, res) => {
   if (!requirement) {
     throw notFound('Requirement not found.');
   }
+
+  assertHasFile(requirement);
 
   requirement.status = status;
   await requirement.save();

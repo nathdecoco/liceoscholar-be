@@ -29,7 +29,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     dateOfBirth: '2006-02-14',
     sex: 'Female',
     requirementDate: '08/06/2026',
-    requirementStatuses: ['Qualified', 'Qualified', 'Qualified'],
+    requirementStatuses: ['Passed', 'Passed', 'Passed'],
     requirementFileNames: ['oliveros-2x2.png', 'oliveros-reportcard.png', 'oliveros-form.pdf']
   },
   {
@@ -42,7 +42,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     dateOfBirth: '2005-11-03',
     sex: 'Female',
     requirementDate: '08/06/2026',
-    requirementStatuses: ['Pending', 'Qualified', 'Pending'],
+    requirementStatuses: ['Pending', 'Passed', 'Pending'],
     requirementFileNames: ['pacatang-2x2.png', 'pacatang-reportcard.png', '']
   },
   {
@@ -55,7 +55,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     dateOfBirth: '2006-07-28',
     sex: 'Female',
     requirementDate: '08/06/2026',
-    requirementStatuses: ['Pending', 'Qualified', 'Not Qualified'],
+    requirementStatuses: ['Pending', 'Passed', 'Not Passed'],
     requirementFileNames: ['Christy2x2.png', 'myreportcard.png', 'screenshot4042_123112.png']
   },
   {
@@ -68,7 +68,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     dateOfBirth: '2006-01-09',
     sex: 'Male',
     requirementDate: '08/06/2026',
-    requirementStatuses: ['Qualified', 'Not Qualified', 'Pending'],
+    requirementStatuses: ['Passed', 'Not Passed', 'Pending'],
     requirementFileNames: ['bean-2x2.png', '', 'bean-form.pdf']
   }
 ];

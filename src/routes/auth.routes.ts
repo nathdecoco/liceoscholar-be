@@ -12,6 +12,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../utils/mailer';
 import { hashPassword, verifyPassword } from '../utils/password';
 import { serializeUser } from '../utils/serialize';
 import { createResetCode, createVerificationToken, hashToken } from '../utils/tokens';
+import { isSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../utils/validation';
 
 export const authRouter = Router();
 
@@ -44,10 +45,21 @@ const passwordSchema = z
   .regex(/[A-Z]/, 'Password must include an uppercase letter.')
   .regex(/\d/, 'Password must include a number.');
 
+/** Every student email must end in @liceo.edu.ph. */
+const schoolEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Enter your school email.')
+  .refine(
+    (value) => isSchoolEmail(value),
+    `Use your school email ending in ${SCHOOL_EMAIL_DOMAIN}.`
+  );
+
 const registerSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name.').max(120),
   suffix: z.string().trim().max(20, 'Suffix is too long.').optional(),
-  email: z.string().trim().toLowerCase().email('Enter a valid school email.'),
+  email: schoolEmailSchema,
   dateOfBirth: z
     .string()
     .trim()
@@ -65,15 +77,15 @@ const verifyEmailSchema = z.object({
 });
 
 const resendVerificationSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Enter a valid school email.')
+  email: schoolEmailSchema
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Enter a valid school email.')
+  email: schoolEmailSchema
 });
 
 const resetPasswordSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Enter a valid school email.'),
+  email: schoolEmailSchema,
   code: z.string().trim().regex(/^\d{4}$/, 'Enter the 4-digit code from your email.'),
   password: passwordSchema
 });
@@ -82,7 +94,16 @@ const resetPasswordSchema = z.object({
 const MAX_RESET_ATTEMPTS = 5;
 
 const loginSchema = z.object({
-  identifier: z.string().trim().min(1, 'Enter your email or username.'),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, 'Enter your email or username.')
+    // Admins sign in with a plain username, so only reject values that look
+    // like an email without the school domain.
+    .refine(
+      (value) => !value.includes('@') || isSchoolEmail(value),
+      `Use your school email ending in ${SCHOOL_EMAIL_DOMAIN}.`
+    ),
   password: z.string().min(1, 'Enter your password.')
 });
 

@@ -1,6 +1,6 @@
 import { HydratedDocument, InferSchemaType, Schema, Types, model } from 'mongoose';
 
-export const REQUIREMENT_STATUSES = ['Pending', 'Qualified', 'Not Qualified'] as const;
+export const REQUIREMENT_STATUSES = ['Pending', 'Passed', 'Not Passed'] as const;
 export type RequirementStatus = (typeof REQUIREMENT_STATUSES)[number];
 
 /** The three documents every scholarship applicant must submit. */

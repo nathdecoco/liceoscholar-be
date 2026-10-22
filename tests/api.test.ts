@@ -65,6 +65,7 @@ async function main(): Promise<void> {
   let studentId = '';
   let requirementId = '';
   let formRequirementId = '';
+  let requirementIds: string[] = [];
   let uploadedFileUrl = '';
   let verificationToken = '';
   let resetCode = '';
@@ -228,6 +229,39 @@ async function main(): Promise<void> {
     assert.ok(sexIssue, 'expected a validation issue for the sex field');
   });
 
+  await check('registration only accepts school emails', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        fullName: 'Wrong Domain',
+        email: 'juan.delacruz@gmail.com',
+        dateOfBirth: '2006-05-04',
+        sex: 'Male',
+        course: 'College of Information Technology',
+        yearLevel: '1st Year',
+        scholarshipType: 'Half Academic Scholarship',
+        password: 'Password1'
+      })
+      .expect(400);
+
+    const emailIssue = res.body.details.find((d: { field: string }) => d.field === 'email');
+    assert.ok(emailIssue, 'expected a validation issue for the email field');
+  });
+
+  await check('login only accepts school emails', async () => {
+    await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'juan.delacruz@gmail.com', password: 'Password1' })
+      .expect(400);
+  });
+
+  await check('forgot password only accepts school emails', async () => {
+    await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: 'juan.delacruz@gmail.com' })
+      .expect(400);
+  });
+
   await check('registration rejects duplicate emails', async () => {
     await request(app)
       .post('/api/auth/register')
@@ -387,6 +421,7 @@ async function main(): Promise<void> {
     assert.equal(res.body.requirements.length, 3);
     assert.equal(res.body.user.email, 'juan.delacruz@liceo.edu.ph');
     requirementId = res.body.requirements[0].id as string;
+    requirementIds = res.body.requirements.map((r: { id: string }) => r.id);
     formRequirementId = (
       res.body.requirements.find((r: { description: string }) => r.description === 'Form') as {
         id: string;
@@ -532,13 +567,22 @@ async function main(): Promise<void> {
     assert.equal(res.body.requirement.fileName, '');
   });
 
-  await check('admin marks a requirement qualified', async () => {
+  await check('student re-uploads the file before it can be reviewed', async () => {
+    const res = await request(app)
+      .post(`/api/me/requirements/${requirementId}/file`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .attach('file', Buffer.from('%PDF-1.4\n%âãÏÓ'), 'report.pdf')
+      .expect(200);
+    assert.ok(res.body.requirement.fileUrl);
+  });
+
+  await check('admin marks a requirement passed', async () => {
     const res = await request(app)
       .patch(`/api/requirements/${requirementId}`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ status: 'Qualified' })
+      .send({ status: 'Passed' })
       .expect(200);
-    assert.equal(res.body.requirement.status, 'Qualified');
+    assert.equal(res.body.requirement.status, 'Passed');
   });
 
   await check('an unknown status is rejected', async () => {
@@ -547,6 +591,57 @@ async function main(): Promise<void> {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ status: 'Approved' })
       .expect(400);
+  });
+
+  await check('a requirement with no file cannot have its status changed', async () => {
+    // Remove it again so it's back to the empty state.
+    await request(app)
+      .delete(`/api/me/requirements/${requirementId}/file`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .expect(200);
+
+    const res = await request(app)
+      .patch(`/api/requirements/${requirementId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'Passed' })
+      .expect(400);
+
+    assert.match(res.body.error, /no file uploaded/i);
+  });
+
+  await check('the application status cannot be decided while a requirement is pending', async () => {
+    const res = await request(app)
+      .patch(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'Qualified' })
+      .expect(400);
+
+    assert.match(res.body.error, /cannot be changed yet/i);
+  });
+
+  await check('the application status can be set back to Pending at any time', async () => {
+    const res = await request(app)
+      .patch(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'Pending' })
+      .expect(200);
+    assert.equal(res.body.student.status, 'Pending');
+  });
+
+  await check('every requirement can be reviewed once it has a file', async () => {
+    for (const id of requirementIds) {
+      await request(app)
+        .post(`/api/me/requirements/${id}/file`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .attach('file', Buffer.from('%PDF-1.4 document'), 'document.pdf')
+        .expect(200);
+
+      await request(app)
+        .patch(`/api/requirements/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'Passed' })
+        .expect(200);
+    }
   });
 
   await check('admin opens a student with their requirements', async () => {
@@ -565,6 +660,15 @@ async function main(): Promise<void> {
       .send({ status: 'Qualified' })
       .expect(200);
     assert.equal(res.body.student.status, 'Qualified');
+  });
+
+  await check('the student is emailed when the application status is decided', async () => {
+    const { getCapturedMails } = await import('../src/utils/mailer');
+    const mails = getCapturedMails();
+    const notice = mails.find(
+      (mail) => mail.to === 'juan.delacruz@liceo.edu.ph' && mail.fullName === 'Dela Cruz, Juan P.'
+    );
+    assert.ok(notice, 'a status notice should have been sent');
   });
 
   await check('an unknown student status is rejected', async () => {
@@ -586,6 +690,114 @@ async function main(): Promise<void> {
 
   await check('unknown routes return 404', async () => {
     await request(app).get('/api/does-not-exist').expect(404);
+  });
+
+  await check('resetting the semester clears submissions and returns everyone to Pending', async () => {
+    // Put the student on a non-default status first, so the reset has work to do.
+    await request(app)
+      .patch(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'Not Qualified' })
+      .expect(200);
+
+    const before = await request(app)
+      .get('/api/students')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    assert.ok(
+      before.body.students.some((s: { status: string }) => s.status === 'Not Qualified'),
+      'expected at least one Not Qualified student before the reset'
+    );
+
+    const res = await request(app)
+      .post('/api/students/reset-semester')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    assert.equal(res.body.status, 'ok');
+
+    const after = await request(app)
+      .get('/api/students')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    assert.ok(
+      after.body.students.every((s: { status: string }) => s.status === 'Pending'),
+      'every student should be Pending after the reset'
+    );
+
+    // The submissions themselves are wiped, not just re-labelled.
+    const detail = await request(app)
+      .get(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    for (const requirement of detail.body.requirements) {
+      assert.equal(requirement.status, 'Pending');
+      assert.equal(requirement.fileUrl, '');
+      assert.equal(requirement.fileName, '');
+      assert.equal(requirement.analysis, null);
+      assert.equal(requirement.analysisState, 'none');
+    }
+
+    // The account itself survives, with its profile intact.
+    assert.equal(detail.body.student.fullName, 'Dela Cruz, Juan P.');
+  });
+
+  await check('a student cannot reset the semester', async () => {
+    await request(app)
+      .post('/api/students/reset-semester')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .expect(403);
+  });
+
+  await check('admin deletes a student along with their requirements', async () => {
+    // There is no create-student endpoint, so register one through signup.
+    const email = 'deletable.student@liceo.edu.ph';
+    const registration = await request(app)
+      .post('/api/auth/register')
+      .send({
+        fullName: 'Deletable, Student T.',
+        email,
+        dateOfBirth: '2005-04-04',
+        sex: 'Male',
+        course: 'College of Nursing',
+        yearLevel: '1st Year',
+        scholarshipType: 'Full Academic Scholarship',
+        password: 'Testing1234'
+      });
+    assert.equal(registration.status, 201);
+
+    const newId = registration.body.user.id;
+    assert.ok(newId, 'the new account should have an id');
+
+    await request(app)
+      .delete(`/api/students/${newId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    await request(app)
+      .get(`/api/students/${newId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(404);
+
+    const list = await request(app)
+      .get('/api/students')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    assert.ok(!list.body.students.some((s: { id: string }) => s.id === newId));
+  });
+
+  await check('deleting a student needs admin rights', async () => {
+    await request(app)
+      .delete(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .expect(403);
+  });
+
+  await check('deleting an unknown student returns 404', async () => {
+    await request(app)
+      .delete('/api/students/64b7f3c2a1d4e5f6a7b8c9d0')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(404);
   });
 
   await disconnectDatabase();
