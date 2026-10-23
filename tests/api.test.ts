@@ -653,7 +653,12 @@ async function main(): Promise<void> {
     assert.equal(res.body.requirements.length, 3);
   });
 
+  let mailsBeforeStatusChange = 0;
+
   await check('admin updates a student status', async () => {
+    const { getCapturedMails } = await import('../src/utils/mailer');
+    mailsBeforeStatusChange = getCapturedMails().length;
+
     const res = await request(app)
       .patch(`/api/students/${studentId}`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -665,10 +670,30 @@ async function main(): Promise<void> {
   await check('the student is emailed when the application status is decided', async () => {
     const { getCapturedMails } = await import('../src/utils/mailer');
     const mails = getCapturedMails();
-    const notice = mails.find(
-      (mail) => mail.to === 'juan.delacruz@liceo.edu.ph' && mail.fullName === 'Dela Cruz, Juan P.'
+
+    // A new message must appear: signup already sent one to this address, so
+    // simply finding any mail would not prove the decision emailed anyone.
+    assert.ok(
+      mails.length > mailsBeforeStatusChange,
+      'a status notice should have been sent'
     );
-    assert.ok(notice, 'a status notice should have been sent');
+
+    const notice = mails[mails.length - 1];
+    assert.equal(notice.to, 'juan.delacruz@liceo.edu.ph');
+    assert.equal(notice.fullName, 'Dela Cruz, Juan P.');
+  });
+
+  await check('setting the same application status again sends no email', async () => {
+    const { getCapturedMails } = await import('../src/utils/mailer');
+    const before = getCapturedMails().length;
+
+    await request(app)
+      .patch(`/api/students/${studentId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'Qualified' })
+      .expect(200);
+
+    assert.equal(getCapturedMails().length, before);
   });
 
   await check('an unknown student status is rejected', async () => {

@@ -113,6 +113,10 @@ studentRouter.patch('/:id', async (req, res) => {
     }
   }
 
+  // Capture the old status before applying anything: reading it after the loop
+  // below would always return the new value and the notice would never fire.
+  const previousStatus = student.status;
+
   for (const [key, value] of Object.entries(body)) {
     if (value !== undefined) {
       student.set(key, value);
@@ -122,16 +126,15 @@ studentRouter.patch('/:id', async (req, res) => {
   // Age is derived from the date of birth, so drop any stale stored value.
   if (body.dateOfBirth !== undefined) student.age = undefined;
 
-  const previousStatus = student.status;
   await student.save();
 
-  // If the application status changed to a final decision, notify the student by email.
+  // A final decision that is actually a change notifies the student by email.
   if (
-    body.status &&
+    student.email &&
     body.status !== previousStatus &&
     (body.status === 'Qualified' || body.status === 'Not Qualified')
   ) {
-    void sendStatusUpdateEmail(student.email ?? '', student.fullName, body.status);
+    void sendStatusUpdateEmail(student.email, student.fullName, body.status);
   }
 
   res.json({ student: serializeUser(student) });

@@ -19,7 +19,7 @@ export interface ScholarshipTier {
   duration: string;
   entryRequirements: string[];
   renewalGuidelines: string[];
-  /** Only listed for the non-academic / special scholarship. */
+  /** Only listed for the special scholarship. */
   programs: string[];
 }
 
@@ -62,7 +62,7 @@ export const SCHOLARSHIPS: ScholarshipTier[] = [
   },
   {
     id: 'non-academic',
-    name: 'Non-Academic Scholarship',
+    name: 'Special Scholarship',
     shortName: 'Special Scholar',
     qualification: '85% GWA in high school',
     coverage: ['100% on tuition fees only'],
@@ -73,7 +73,7 @@ export const SCHOLARSHIPS: ScholarshipTier[] = [
     ],
     renewalGuidelines: [
       'Students must maintain a GWA of at least 1.7 and above and must have no failing grade.',
-      'After one year, students may apply for academic or non-academic scholarships in the succeeding years.'
+      'After one year, students may apply for academic or special scholarships in the succeeding years.'
     ],
     programs: [
       'Bachelor of Library and Information Science',

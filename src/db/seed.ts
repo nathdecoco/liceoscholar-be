@@ -50,7 +50,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     email: 'christy.reyes@liceo.edu.ph',
     course: 'College of Information Technology',
     yearLevel: '3rd Year',
-    scholarshipType: 'Non-Academic Scholarship',
+    scholarshipType: 'Special Scholarship',
     status: 'Pending',
     dateOfBirth: '2006-07-28',
     sex: 'Female',
