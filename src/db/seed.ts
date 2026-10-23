@@ -104,7 +104,7 @@ async function seedAdministrator(): Promise<void> {
         role: 'admin',
         username: env.adminUsername,
         email: 'admin@liceo.edu.ph',
-        fullName: 'Batumbakal, Ashton Tantado Jr.',
+        fullName: 'Liceo U Scholarship Office.',
         passwordHash,
         emailVerified: true,
         sex: 'Male',
